@@ -1,0 +1,11 @@
+# PocketRAG MCP Server Configuration
+project_number: "YOUR_PROJECT_NUMBER"
+location: "us"
+api_version: "v1alpha"
+mock_mode: false
+
+# Polling & Retry Settings
+poll_initial_seconds: 2
+poll_max_seconds: 15
+poll_timeout_seconds: 300
+retry_max_attempts: 3

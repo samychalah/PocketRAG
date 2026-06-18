@@ -1,0 +1,16 @@
+{
+  "name": "pocketrag",
+  "version": "1.0.0",
+  "description": "Portable RAG Skill — NotebookLM-as-a-RAG for Any LLM using Vertex AI Discovery Engine.",
+  "skills": ["skills/pocketrag/SKILL.md"],
+  "mcpServers": {
+    "pocketrag": {
+      "command": "python3",
+      "args": ["-m", "pocketrag.server"],
+      "env": {
+        "NBLM_CONFIG": "${PLUGIN_DIR}/mcp/config.yaml",
+        "PYTHONPATH": "${PLUGIN_DIR}/mcp/src"
+      }
+    }
+  }
+}

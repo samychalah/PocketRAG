@@ -1,0 +1,777 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>PocketRAG — Perfect memory for your reasoning agent</title>
+<meta name="description" content="PocketRAG gives Claude Code, Cursor & Gemini a perfect memory: NotebookLM-grade grounding (zero hallucinations) feeding a state-of-the-art reasoning layer that writes code, refactors & executes." />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
+<style>
+:root{
+  --bg-base:#030508; --bg-surface:#0a0d14; --bg-elevated:#111827;
+  --blue-500:#3b82f6; --indigo-500:#6366f1; --violet-500:#8b5cf6;
+  --emerald-500:#10b981; --amber-500:#f59e0b; --rose-500:#f43f5e;
+  --text-100:#f9fafb; --text-400:#9ca3af;
+  --border:rgba(255,255,255,.08); --border-hover:rgba(255,255,255,.16);
+  --radius-sm:10px; --radius:16px; --radius-lg:24px; --radius-xl:32px;
+  --shadow:0 8px 30px rgba(0,0,0,.5);
+  --shadow-glow:0 0 40px rgba(59,130,246,.25);
+  --grad-primary:linear-gradient(135deg,var(--blue-500),var(--violet-500));
+  --grad-positive:linear-gradient(135deg,var(--emerald-500),var(--blue-500));
+  --grad-problem:linear-gradient(135deg,var(--amber-500),var(--rose-500));
+  --grad-ground:linear-gradient(135deg,var(--emerald-500),#0ea5e9);
+  --grad-reason:linear-gradient(135deg,var(--violet-500),var(--indigo-500));
+  --ease-spring:cubic-bezier(.34,1.56,.64,1);
+  --ease-smooth:cubic-bezier(.4,0,.2,1);
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{font-family:'Inter',sans-serif;background:var(--bg-base);color:var(--text-100);line-height:1.6;overflow-x:hidden;-webkit-font-smoothing:antialiased}
+.mono{font-family:'JetBrains Mono',monospace}
+a{text-decoration:none;color:inherit}
+.container{max-width:1200px;margin:0 auto;padding:0 24px}
+.gradient-text{background:var(--grad-primary);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}
+.gradient-text-pos{background:var(--grad-positive);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}
+.gradient-text-ground{background:var(--grad-ground);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}
+.gradient-text-reason{background:var(--grad-reason);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}
+
+/* Background */
+.bg-layer{position:fixed;inset:0;z-index:-1;overflow:hidden}
+.orb{position:absolute;border-radius:50%;filter:blur(90px);opacity:.4;animation:float 20s infinite ease-in-out}
+.orb-1{width:500px;height:500px;background:var(--blue-500);top:-150px;left:-100px}
+.orb-2{width:420px;height:420px;background:var(--violet-500);top:30%;right:-120px;animation-delay:-7s}
+.orb-3{width:380px;height:380px;background:var(--emerald-500);bottom:-120px;left:25%;animation-delay:-14s;opacity:.25}
+@keyframes float{0%,100%{transform:translate(0,0) scale(1)}33%{transform:translate(40px,-40px) scale(1.1)}66%{transform:translate(-30px,30px) scale(.95)}}
+.grid-overlay{position:fixed;inset:0;z-index:-1;background-image:linear-gradient(rgba(255,255,255,.025) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.025) 1px,transparent 1px);background-size:60px 60px;-webkit-mask-image:radial-gradient(ellipse 80% 60% at 50% 0%,#000 40%,transparent 100%);mask-image:radial-gradient(ellipse 80% 60% at 50% 0%,#000 40%,transparent 100%)}
+
+/* Navbar */
+.navbar{position:fixed;top:0;left:0;right:0;z-index:100;transition:all .4s var(--ease-smooth);padding:16px 0}
+.navbar.scrolled{background:rgba(3,5,8,.7);backdrop-filter:blur(20px);border-bottom:1px solid var(--border);padding:10px 0}
+.nav-inner{display:flex;align-items:center;justify-content:space-between}
+.logo{display:flex;align-items:center;gap:10px;font-weight:800;font-size:1.25rem}
+.logo-mark{width:38px;height:38px;border-radius:11px;background:var(--grad-primary);display:grid;place-items:center;font-size:1.1rem;box-shadow:var(--shadow-glow)}
+.nav-links{display:flex;gap:6px;align-items:center}
+.nav-links a.pill{padding:8px 16px;border-radius:999px;color:var(--text-400);font-size:.9rem;font-weight:500;transition:all .25s var(--ease-smooth)}
+.nav-links a.pill:hover{color:var(--text-100);background:rgba(255,255,255,.06)}
+.btn{display:inline-flex;align-items:center;gap:9px;padding:11px 22px;border-radius:999px;font-weight:600;font-size:.9rem;cursor:pointer;border:none;transition:all .3s var(--ease-spring)}
+.btn-primary{background:var(--grad-primary);color:#fff;box-shadow:var(--shadow-glow)}
+.btn-primary:hover{transform:translateY(-3px);box-shadow:0 10px 40px rgba(99,102,241,.5)}
+.btn-ghost{background:rgba(255,255,255,.05);color:var(--text-100);border:1px solid var(--border)}
+.btn-ghost:hover{background:rgba(255,255,255,.1);border-color:var(--border-hover);transform:translateY(-3px)}
+.btn-white{background:#fff;color:var(--blue-500)}.btn-white:hover{transform:translateY(-3px)}
+.nav-toggle{display:none;background:none;border:none;color:var(--text-100);font-size:1.4rem;cursor:pointer}
+
+/* Sections */
+section{padding:100px 0;position:relative}
+.eyebrow{display:inline-flex;align-items:center;gap:8px;font-family:'JetBrains Mono',monospace;font-size:.78rem;text-transform:uppercase;letter-spacing:.15em;color:var(--blue-500);padding:6px 14px;border:1px solid var(--border);border-radius:999px;background:rgba(59,130,246,.06);margin-bottom:20px}
+.section-title{font-size:clamp(2rem,4vw,3rem);font-weight:800;letter-spacing:-.02em;margin-bottom:16px;line-height:1.1}
+.section-sub{color:var(--text-400);font-size:1.1rem;max-width:680px}
+.center{text-align:center}.center .section-sub{margin:0 auto}
+
+/* Hero */
+.hero{padding-top:160px;min-height:100vh;display:flex;align-items:center}
+.hero-grid{display:grid;grid-template-columns:1.05fr .95fr;gap:60px;align-items:center}
+.status-pill{display:inline-flex;align-items:center;gap:9px;padding:7px 16px;border-radius:999px;background:rgba(16,185,129,.1);border:1px solid rgba(16,185,129,.25);font-size:.82rem;font-weight:500;margin-bottom:28px}
+.status-dot{width:8px;height:8px;border-radius:50%;background:var(--emerald-500);box-shadow:0 0 10px var(--emerald-500);animation:pulse 2s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+.hero h1{font-size:clamp(2.6rem,5.5vw,4.4rem);font-weight:900;letter-spacing:-.03em;line-height:1.04;margin-bottom:24px}
+.hero p.lead{font-size:1.2rem;color:var(--text-400);margin-bottom:36px;max-width:540px}
+.hero-ctas{display:flex;gap:14px;flex-wrap:wrap;margin-bottom:48px}
+.stat-strip{display:flex;gap:36px;flex-wrap:wrap}
+.stat .num{font-size:2rem;font-weight:800;font-family:'JetBrains Mono',monospace}
+.stat .lbl{font-size:.82rem;color:var(--text-400)}
+
+/* Window mock */
+.window{background:var(--bg-surface);border:1px solid var(--border);border-radius:var(--radius-lg);box-shadow:var(--shadow);overflow:hidden}
+.window-bar{display:flex;align-items:center;gap:8px;padding:14px 18px;border-bottom:1px solid var(--border);background:rgba(255,255,255,.02)}
+.dot{width:12px;height:12px;border-radius:50%}.dot.r{background:#ff5f56}.dot.y{background:#ffbd2e}.dot.g{background:#27c93f}
+.window-title{margin-left:10px;font-family:'JetBrains Mono',monospace;font-size:.8rem;color:var(--text-400)}
+.chat{padding:20px;display:flex;flex-direction:column;gap:14px;font-size:.88rem}
+.msg{display:flex;gap:11px;animation:slideIn .5s var(--ease-smooth) both}
+.msg .av{width:30px;height:30px;border-radius:9px;display:grid;place-items:center;flex-shrink:0;font-size:.75rem;font-weight:700}
+.msg.user .av{background:rgba(255,255,255,.08)}
+.msg.tool .av{background:var(--grad-ground)}
+.msg.bot .av{background:var(--grad-reason)}
+.msg .bubble{background:var(--bg-elevated);border:1px solid var(--border);border-radius:14px;padding:11px 14px;color:var(--text-100)}
+.msg.tool .bubble{background:rgba(16,185,129,.07);border-color:rgba(16,185,129,.22)}
+.msg.bot .bubble{background:rgba(139,92,246,.07);border-color:rgba(139,92,246,.22)}
+.tag{display:inline-block;font-family:'JetBrains Mono',monospace;font-size:.68rem;padding:2px 7px;border-radius:6px;margin-bottom:5px}
+.tag.ground{background:rgba(16,185,129,.15);color:var(--emerald-500)}
+.tag.reason{background:rgba(139,92,246,.15);color:var(--violet-500)}
+.bubble code{font-family:'JetBrains Mono',monospace;font-size:.8rem;background:rgba(255,255,255,.06);padding:1px 5px;border-radius:5px}
+@keyframes slideIn{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
+
+/* Reveal */
+.reveal{opacity:0;transform:translateY(30px);transition:opacity .7s var(--ease-smooth),transform .7s var(--ease-smooth)}
+.reveal.visible{opacity:1;transform:none}
+.card{background:var(--bg-surface);border:1px solid var(--border);border-radius:var(--radius);padding:28px;transition:all .4s var(--ease-spring)}
+.card:hover{transform:translateY(-6px);border-color:var(--border-hover);box-shadow:var(--shadow)}
+
+/* ===== TWO-LAYER SYNERGY ===== */
+.synergy-grid{display:grid;grid-template-columns:1fr 1fr;gap:24px;position:relative}
+.layer-card{padding:34px;border-radius:var(--radius-lg);border:1px solid var(--border);position:relative;overflow:hidden}
+.layer-card.ground{background:linear-gradient(165deg,rgba(16,185,129,.1),transparent 70%)}
+.layer-card.reason{background:linear-gradient(165deg,rgba(139,92,246,.1),transparent 70%)}
+.layer-badge{display:inline-flex;align-items:center;gap:8px;font-family:'JetBrains Mono',monospace;font-size:.74rem;text-transform:uppercase;letter-spacing:.12em;padding:5px 12px;border-radius:999px;margin-bottom:18px}
+.layer-card.ground .layer-badge{background:rgba(16,185,129,.15);color:var(--emerald-500)}
+.layer-card.reason .layer-badge{background:rgba(139,92,246,.15);color:var(--violet-500)}
+.layer-icon{width:52px;height:52px;border-radius:14px;display:grid;place-items:center;font-size:1.3rem;margin-bottom:18px;box-shadow:var(--shadow-glow)}
+.layer-card.ground .layer-icon{background:var(--grad-ground)}
+.layer-card.reason .layer-icon{background:var(--grad-reason)}
+.layer-card h3{font-size:1.5rem;margin-bottom:8px}
+.layer-card .role{font-family:'JetBrains Mono',monospace;font-size:.82rem;color:var(--text-400);margin-bottom:18px}
+.layer-list{list-style:none;display:flex;flex-direction:column;gap:12px;margin-top:6px}
+.layer-list li{display:flex;gap:11px;align-items:flex-start;color:var(--text-400);font-size:.94rem}
+.layer-card.ground .layer-list i{color:var(--emerald-500);margin-top:3px}
+.layer-card.reason .layer-list i{color:var(--violet-500);margin-top:3px}
+.synergy-connector{display:grid;place-items:center;margin:8px 0}
+.synergy-connector .flow-pill{display:inline-flex;align-items:center;gap:12px;padding:12px 22px;border-radius:999px;background:var(--bg-elevated);border:1px solid var(--border);font-family:'JetBrains Mono',monospace;font-size:.82rem}
+.flow-pill .arrow{color:var(--blue-500);animation:nudge 1.6s infinite}
+@keyframes nudge{0%,100%{transform:translateX(0)}50%{transform:translateX(5px)}}
+
+/* AHA banner */
+.aha-card{margin-top:32px;background:linear-gradient(135deg,rgba(59,130,246,.1),rgba(139,92,246,.1));border:1px solid rgba(139,92,246,.25);border-radius:var(--radius-lg);padding:36px;text-align:center}
+.aha-card .aha-tag{font-family:'JetBrains Mono',monospace;font-size:.78rem;letter-spacing:.15em;color:var(--amber-500);text-transform:uppercase;margin-bottom:14px;display:block}
+.aha-card h3{font-size:clamp(1.4rem,3vw,2rem);font-weight:800;margin-bottom:12px;line-height:1.2}
+.aha-card p{color:var(--text-400);max-width:680px;margin:0 auto;font-size:1.02rem}
+
+/* Responsibility matrix */
+.matrix{width:100%;border-collapse:collapse;font-size:.92rem;overflow:hidden;border-radius:var(--radius);border:1px solid var(--border)}
+.matrix th,.matrix td{padding:16px 20px;text-align:left;border-bottom:1px solid var(--border);vertical-align:top}
+.matrix th{background:rgba(255,255,255,.03);font-family:'JetBrains Mono',monospace;font-size:.78rem;text-transform:uppercase;letter-spacing:.1em;color:var(--text-400)}
+.matrix tr:last-child td{border-bottom:none}
+.matrix tr:hover td{background:rgba(255,255,255,.02)}
+.matrix .col-feat{font-weight:600;color:var(--text-100)}
+.chip{display:inline-block;padding:4px 12px;border-radius:999px;font-size:.78rem;font-weight:600;font-family:'JetBrains Mono',monospace}
+.chip.blue{background:rgba(59,130,246,.15);color:var(--blue-500)}
+.chip.emerald{background:rgba(16,185,129,.15);color:var(--emerald-500)}
+.chip.amber{background:rgba(245,158,11,.15);color:var(--amber-500)}
+.chip.violet{background:rgba(139,92,246,.15);color:var(--violet-500)}
+.chip.rose{background:rgba(244,63,94,.15);color:var(--rose-500)}
+
+/* Problem / Solution */
+.ps-grid{display:grid;grid-template-columns:1fr 1fr;gap:24px}
+.ps-card{padding:32px;border-radius:var(--radius-lg);border:1px solid var(--border)}
+.ps-card.prob{background:linear-gradient(160deg,rgba(244,63,94,.08),transparent)}
+.ps-card.sol{background:linear-gradient(160deg,rgba(16,185,129,.08),transparent)}
+.ps-card h3{font-size:1.4rem;margin-bottom:18px;display:flex;align-items:center;gap:12px}
+.ps-icon{width:44px;height:44px;border-radius:12px;display:grid;place-items:center;font-size:1.1rem}
+.prob .ps-icon{background:var(--grad-problem)}.sol .ps-icon{background:var(--grad-positive)}
+.check-list{list-style:none;display:flex;flex-direction:column;gap:14px}
+.check-list li{display:flex;gap:12px;align-items:flex-start;color:var(--text-400)}
+.check-list i{margin-top:3px}.prob .check-list i{color:var(--rose-500)}.sol .check-list i{color:var(--emerald-500)}
+
+/* Bento */
+.bento{display:grid;grid-template-columns:repeat(3,1fr);gap:20px;grid-auto-rows:minmax(180px,auto)}
+.bento .card{display:flex;flex-direction:column}
+.b-span2{grid-column:span 2}
+.feat-icon{width:48px;height:48px;border-radius:13px;background:var(--grad-primary);display:grid;place-items:center;font-size:1.2rem;margin-bottom:18px;box-shadow:var(--shadow-glow)}
+.card h3{font-size:1.18rem;margin-bottom:10px}
+.card p{color:var(--text-400);font-size:.94rem}
+.code-block{background:#05070b;border:1px solid var(--border);border-radius:12px;padding:16px;font-family:'JetBrains Mono',monospace;font-size:.8rem;overflow-x:auto;margin-top:auto;line-height:1.7}
+.code-block .k{color:var(--violet-500)}.code-block .s{color:var(--emerald-500)}.code-block .c{color:var(--text-400)}.code-block .n{color:var(--amber-500)}
+
+/* Pipeline */
+.pipeline{display:flex;justify-content:space-between;position:relative;margin-top:60px;flex-wrap:wrap;gap:24px}
+.pipeline::before{content:'';position:absolute;top:28px;left:6%;right:6%;height:2px;background:linear-gradient(90deg,var(--emerald-500),var(--blue-500),var(--violet-500));opacity:.35;z-index:0}
+.pstep{flex:1;min-width:150px;text-align:center;position:relative;z-index:1}
+.porb{width:56px;height:56px;border-radius:50%;background:var(--bg-elevated);border:2px solid var(--blue-500);display:grid;place-items:center;margin:0 auto 18px;font-weight:800;font-family:'JetBrains Mono',monospace;box-shadow:0 0 25px rgba(59,130,246,.3);transition:all .4s var(--ease-spring)}
+.pstep:hover .porb{transform:scale(1.12);background:var(--grad-primary)}
+.porb.g{border-color:var(--emerald-500)}.porb.v{border-color:var(--violet-500)}
+.pstep h4{font-size:1rem;margin-bottom:6px}.pstep p{font-size:.85rem;color:var(--text-400)}
+
+/* KPIs */
+.kpi-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:20px}
+.kpi{text-align:center;padding:32px 20px}
+.kpi .big{font-size:2.8rem;font-weight:900;font-family:'JetBrains Mono',monospace;line-height:1}
+.kpi .lbl{color:var(--text-400);font-size:.88rem;margin-top:10px}
+
+/* Architecture */
+.arch-window .ascii{padding:28px;font-family:'JetBrains Mono',monospace;font-size:.82rem;line-height:1.7;overflow-x:auto;white-space:pre;color:var(--text-400)}
+.arch-window .ascii .hb{color:var(--blue-500)}.arch-window .ascii .hv{color:var(--violet-500)}.arch-window .ascii .he{color:var(--emerald-500)}.arch-window .ascii .ha{color:var(--amber-500)}
+
+/* Demo */
+.demo-wrap{display:grid;grid-template-columns:1fr 1.1fr;gap:28px;align-items:start}
+.tabs{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:22px}
+.tab{padding:8px 18px;border-radius:999px;border:1px solid var(--border);background:transparent;color:var(--text-400);cursor:pointer;font-size:.85rem;font-weight:500;font-family:inherit;transition:all .25s}
+.tab.active{background:var(--grad-primary);color:#fff;border-color:transparent}
+.examples{display:flex;flex-direction:column;gap:14px}
+.ex-card{padding:18px;border-radius:var(--radius);border:1px solid var(--border);background:var(--bg-surface);cursor:pointer;transition:all .3s var(--ease-spring)}
+.ex-card:hover{border-color:var(--blue-500);transform:translateX(6px)}
+.ex-card.active{border-color:var(--blue-500);background:rgba(59,130,246,.06)}
+.ex-card .ex-top{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
+.ex-card h4{font-size:.98rem}
+.ex-card .ex-q{color:var(--text-400);font-size:.86rem}
+.copy-btn{background:none;border:none;color:var(--text-400);cursor:pointer;font-size:.85rem;transition:color .2s}
+.copy-btn:hover{color:var(--blue-500)}
+.sim-panel{background:var(--bg-surface);border:1px solid var(--border);border-radius:var(--radius-lg);overflow:hidden;position:sticky;top:90px}
+.sim-head{padding:16px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between}
+.sim-head .st{font-family:'JetBrains Mono',monospace;font-size:.8rem;display:flex;align-items:center;gap:8px}
+.sim-body{padding:22px;min-height:380px;display:flex;flex-direction:column;gap:14px}
+.sim-status{font-family:'JetBrains Mono',monospace;font-size:.78rem;padding:5px 12px;border-radius:999px}
+.sim-status.idle{background:rgba(156,163,175,.15);color:var(--text-400)}
+.sim-status.proc{background:rgba(245,158,11,.15);color:var(--amber-500)}
+.sim-status.done{background:rgba(16,185,129,.15);color:var(--emerald-500)}
+.sim-line{display:flex;gap:10px;align-items:center;font-family:'JetBrains Mono',monospace;font-size:.8rem;color:var(--text-400);opacity:0;transform:translateX(-8px);transition:all .4s}
+.sim-line.show{opacity:1;transform:none}
+.sim-line i{width:16px;text-align:center}
+.sim-line.ground i{color:var(--emerald-500)}.sim-line.reason i{color:var(--violet-500)}
+.layer-box{border-radius:14px;padding:16px;opacity:0;transform:translateY(10px);transition:all .5s}
+.layer-box.show{opacity:1;transform:none}
+.layer-box.ground-box{background:rgba(16,185,129,.07);border:1px solid rgba(16,185,129,.22)}
+.layer-box.reason-box{background:rgba(139,92,246,.07);border:1px solid rgba(139,92,246,.22)}
+.layer-box .lb-tag{font-family:'JetBrains Mono',monospace;font-size:.68rem;letter-spacing:.08em;margin-bottom:8px;display:flex;align-items:center;gap:6px}
+.ground-box .lb-tag{color:var(--emerald-500)}.reason-box .lb-tag{color:var(--violet-500)}
+.layer-box .lb-body{font-size:.88rem;color:var(--text-100)}
+.layer-box pre{font-family:'JetBrains Mono',monospace;font-size:.76rem;background:#05070b;border:1px solid var(--border);border-radius:9px;padding:12px;margin-top:10px;overflow-x:auto;white-space:pre-wrap;line-height:1.55;color:var(--text-100)}
+.layer-box pre .k{color:var(--violet-500)}.layer-box pre .s{color:var(--emerald-500)}.layer-box pre .c{color:var(--text-400)}
+.run-btn{width:100%;justify-content:center}
+
+/* CTA */
+.cta-card{background:var(--grad-primary);border-radius:var(--radius-xl);padding:64px 40px;text-align:center;position:relative;overflow:hidden}
+.cta-card::before{content:'';position:absolute;inset:0;background:radial-gradient(circle at 30% 20%,rgba(255,255,255,.2),transparent 50%)}
+.cta-card h2{font-size:clamp(1.8rem,4vw,2.8rem);font-weight:900;margin-bottom:16px;position:relative}
+.cta-card p{color:rgba(255,255,255,.9);font-size:1.1rem;margin-bottom:32px;position:relative}
+.cta-card .btn-ghost{background:rgba(255,255,255,.15);border-color:rgba(255,255,255,.3);color:#fff}
+.cta-card .btn{position:relative}
+.cta-btns{display:flex;gap:14px;justify-content:center;flex-wrap:wrap}
+
+/* Footer */
+footer{padding:60px 0 40px;border-top:1px solid var(--border)}
+.foot-grid{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:24px}
+.foot-links{display:flex;gap:24px}.foot-links a{color:var(--text-400);transition:color .2s}.foot-links a:hover{color:var(--text-100)}
+.copyright{color:var(--text-400);font-size:.85rem}
+
+/* Stagger */
+.stagger>*{opacity:0;transform:translateY(24px);transition:opacity .6s var(--ease-smooth),transform .6s var(--ease-smooth)}
+.stagger.visible>*{opacity:1;transform:none}
+
+/* Responsive */
+@media(max-width:1024px){
+  .hero-grid,.demo-wrap,.synergy-grid{grid-template-columns:1fr;gap:40px}
+  .synergy-connector{transform:rotate(90deg);margin:0}
+  .bento{grid-template-columns:repeat(2,1fr)}.b-span2{grid-column:span 2}
+  .kpi-grid{grid-template-columns:repeat(2,1fr)}
+  .nav-links{display:none}.nav-toggle{display:block}
+}
+@media(max-width:640px){
+  section{padding:70px 0}
+  .ps-grid,.bento{grid-template-columns:1fr}.b-span2{grid-column:span 1}
+  .kpi-grid{grid-template-columns:1fr 1fr}
+  .pipeline::before{display:none}
+  .stat-strip{gap:24px}
+  .matrix th,.matrix td{padding:12px}
+}
+</style>
+</head>
+<body>
+
+<div class="bg-layer" aria-hidden="true"><div class="orb orb-1"></div><div class="orb orb-2"></div><div class="orb orb-3"></div></div>
+<div class="grid-overlay" aria-hidden="true"></div>
+
+<!-- Navbar -->
+<nav class="navbar" id="navbar">
+  <div class="container nav-inner">
+    <a href="#top" class="logo"><span class="logo-mark">🪶</span> PocketRAG</a>
+    <div class="nav-links">
+      <a href="#synergy" class="pill">Synergy</a>
+      <a href="#problem" class="pill">Problem</a>
+      <a href="#features" class="pill">Features</a>
+      <a href="#demo" class="pill">Live Demo</a>
+      <a href="#architecture" class="pill">Architecture</a>
+    </div>
+    <a href="https://github.com/mbettan/PocketRAG" class="btn btn-primary"><i class="fab fa-github"></i> View on GitHub</a>
+    <button class="nav-toggle" aria-label="Menu"><i class="fas fa-bars"></i></button>
+  </div>
+</nav>
+
+<!-- Hero -->
+<section class="hero" id="top">
+  <div class="container hero-grid">
+    <div>
+      <div class="status-pill reveal"><span class="status-dot"></span> Grounding + Reasoning · Cross-LLM Skill</div>
+      <h1 class="reveal">Give your agent a <span class="gradient-text">perfect memory</span>.</h1>
+      <p class="lead reveal">PocketRAG fuses <strong class="gradient-text-ground">NotebookLM-grade grounding</strong> with your agent's <strong class="gradient-text-reason">reasoning power</strong>. Claude Code, Cursor &amp; Gemini get <strong>100% accurate facts on-demand</strong> — then write the code, run the commands, and ship the work.</p>
+      <div class="hero-ctas reveal">
+        <a href="#demo" class="btn btn-primary"><i class="fas fa-play"></i> See the Synergy</a>
+        <a href="https://github.com/mbettan/PocketRAG" class="btn btn-ghost"><i class="fab fa-github"></i> Get the Code</a>
+      </div>
+      <div class="stat-strip reveal">
+        <div class="stat"><div class="num gradient-text-ground">0</div><div class="lbl">Hallucinated facts</div></div>
+        <div class="stat"><div class="num gradient-text-reason">∞</div><div class="lbl">Reasoning over docs</div></div>
+        <div class="stat"><div class="num gradient-text">&lt;90s</div><div class="lbl">Time-to-RAG</div></div>
+      </div>
+    </div>
+    <div class="reveal">
+      <div class="window">
+        <div class="window-bar"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span class="window-title">claude-code · ~/project</span></div>
+        <div class="chat">
+          <div class="msg user" style="animation-delay:.1s"><div class="av">You</div><div class="bubble">Read the API spec PDF I staged, then write a Python server that implements it.</div></div>
+          <div class="msg tool" style="animation-delay:.5s"><div class="av">🪶</div><div class="bubble"><span class="tag ground">grounding layer · ask_notebook</span><br/>Retrieved spec: <code>POST /orders</code>, <code>GET /orders/{id}</code>, auth = Bearer. <em>(zero hallucination, OCR-verified)</em></div></div>
+          <div class="msg bot" style="animation-delay:.9s"><div class="av">🧠</div><div class="bubble"><span class="tag reason">reasoning layer · claude code</span><br/>Wrote <code>server.py</code> + <code>routes/orders.py</code> implementing both endpoints with Bearer auth. ✅</div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===== TWO-LAYER SYNERGY (the centerpiece) ===== -->
+<section id="synergy">
+  <div class="container">
+    <div class="center" style="margin-bottom:54px">
+      <div class="eyebrow reveal"><i class="fas fa-link"></i> The Core Insight</div>
+      <h2 class="section-title reveal">Two layers. One <span class="gradient-text">superpower</span>.</h2>
+      <p class="section-sub reveal">PocketRAG doesn't replace your agent's intelligence — it <strong>feeds</strong> it. A grounding layer guarantees the facts; your reasoning layer does the work.</p>
+    </div>
+
+    <div class="synergy-grid">
+      <!-- Grounding -->
+      <div class="layer-card ground reveal">
+        <span class="layer-badge"><i class="fas fa-database"></i> Layer 1</span>
+        <div class="layer-icon"><i class="fas fa-anchor"></i></div>
+        <h3 class="gradient-text-ground">The Grounding Layer</h3>
+        <div class="role">NotebookLM · Discovery Engine API</div>
+        <p style="color:var(--text-400);margin-bottom:14px">When your agent calls <code style="font-family:'JetBrains Mono',monospace;color:var(--emerald-500)">ask_notebook</code>, the RAG backend does the heavy lifting:</p>
+        <ul class="layer-list">
+          <li><i class="fas fa-check"></i> High-fidelity retrieval &amp; OCR (even scanned PDFs)</li>
+          <li><i class="fas fa-check"></i> Extracts the raw, verifiable facts</li>
+          <li><i class="fas fa-check"></i> Returns a <strong>strictly grounded, hallucination-free</strong> result</li>
+          <li><i class="fas fa-check"></i> Documents never bloat the agent's context window</li>
+        </ul>
+      </div>
+
+      <!-- Reasoning -->
+      <div class="layer-card reason reveal">
+        <span class="layer-badge"><i class="fas fa-brain"></i> Layer 2</span>
+        <div class="layer-icon"><i class="fas fa-wand-magic-sparkles"></i></div>
+        <h3 class="gradient-text-reason">The Reasoning Layer</h3>
+        <div class="role">Claude Code · Cursor · Gemini</div>
+        <p style="color:var(--text-400);margin-bottom:14px">Your agent receives those grounded facts and <strong>reasons over them</strong> to do real work:</p>
+        <ul class="layer-list">
+          <li><i class="fas fa-check"></i> <strong>Code generation</strong> — implement a spec it just retrieved</li>
+          <li><i class="fas fa-check"></i> <strong>Refactor &amp; debug</strong> against documented rules</li>
+          <li><i class="fas fa-check"></i> <strong>Multi-step workflows</strong> — query, test, run, write</li>
+          <li><i class="fas fa-check"></i> Edits local files &amp; runs terminal commands</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="synergy-connector reveal">
+      <div class="flow-pill">
+        <span class="gradient-text-ground">Grounded facts</span>
+        <i class="fas fa-arrow-right arrow"></i>
+        <span class="gradient-text-reason">Reasoned action</span>
+      </div>
+    </div>
+
+    <!-- AHA -->
+    <div class="aha-card reveal">
+      <span class="aha-tag"><i class="fas fa-lightbulb"></i> The "Aha!" Synergy</span>
+      <h3>A software architect with a <span class="gradient-text">perfect memory</span>.</h3>
+      <p>Your agent never guesses or forgets the specs — because an instant, managed RAG backend feeds it <strong>100% accurate facts on demand</strong>. It keeps every ounce of its reasoning, coding, and execution power, but loses its only weakness: <strong>hallucination</strong>.</p>
+    </div>
+  </div>
+</section>
+
+<!-- Responsibility Matrix -->
+<section id="matrix">
+  <div class="container">
+    <div class="center" style="margin-bottom:54px">
+      <div class="eyebrow reveal"><i class="fas fa-table-cells-large"></i> Division of Labor</div>
+      <h2 class="section-title reveal">Each layer plays to its <span class="gradient-text">strength</span>.</h2>
+    </div>
+    <div class="reveal">
+      <table class="matrix">
+        <thead>
+          <tr>
+            <th>Dimension</th>
+            <th><span class="chip emerald"><i class="fas fa-anchor"></i> Grounding Layer</span></th>
+            <th><span class="chip violet"><i class="fas fa-brain"></i> Reasoning Layer</span></th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td class="col-feat">Responsibility</td><td>Retrieval &amp; fact accuracy</td><td>Reasoning &amp; execution</td></tr>
+          <tr><td class="col-feat">Strength</td><td>100% accurate search, excellent OCR, <strong style="color:var(--emerald-500)">zero hallucinations</strong></td><td>Writes code, runs commands, understands local workspace</td></tr>
+          <tr><td class="col-feat">Weakness (alone)</td><td><span class="chip rose">Can't edit files / run code</span></td><td><span class="chip rose">Hallucinates when context is stuffed</span></td></tr>
+          <tr><td class="col-feat">Powered by</td><td><span class="chip blue">Discovery Engine API</span></td><td><span class="chip violet">Claude / Cursor / Gemini</span></td></tr>
+          <tr><td class="col-feat">Combined result</td><td colspan="2"><span class="chip amber"><i class="fas fa-bolt"></i> An agent that never forgets the spec — and always ships working code.</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<!-- Problem / Solution -->
+<section id="problem">
+  <div class="container">
+    <div class="center" style="margin-bottom:54px">
+      <div class="eyebrow reveal"><i class="fas fa-triangle-exclamation"></i> The Problem</div>
+      <h2 class="section-title reveal">Smart agents, <span class="gradient-text">unreliable memory</span>.</h2>
+      <p class="section-sub reveal">Reasoning models are brilliant — until you stuff a 60-page PDF into their context and they start inventing details.</p>
+    </div>
+    <div class="ps-grid">
+      <div class="ps-card prob reveal">
+        <h3><span class="ps-icon"><i class="fas fa-ghost"></i></span> Agent Alone</h3>
+        <ul class="check-list">
+          <li><i class="fas fa-xmark"></i> Hallucinates facts from large documents</li>
+          <li><i class="fas fa-xmark"></i> Loses details when the context window fills up</li>
+          <li><i class="fas fa-xmark"></i> No managed retrieval — you build the RAG yourself</li>
+          <li><i class="fas fa-xmark"></i> Re-uploads the same docs every session</li>
+        </ul>
+      </div>
+      <div class="ps-card sol reveal">
+        <h3><span class="ps-icon"><i class="fas fa-feather"></i></span> Agent + PocketRAG</h3>
+        <ul class="check-list">
+          <li><i class="fas fa-check"></i> Grounded, OCR-verified facts on demand</li>
+          <li><i class="fas fa-check"></i> Docs live in the RAG, not the context window</li>
+          <li><i class="fas fa-check"></i> Zero-infra managed RAG via your GCP project</li>
+          <li><i class="fas fa-check"></i> Reuse staged notebooks across sessions</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Features -->
+<section id="features">
+  <div class="container">
+    <div class="center" style="margin-bottom:54px">
+      <div class="eyebrow reveal"><i class="fas fa-layer-group"></i> Capabilities</div>
+      <h2 class="section-title reveal">Built for <span class="gradient-text">reasoning agents</span>.</h2>
+    </div>
+    <div class="bento stagger">
+      <div class="card b-span2">
+        <div class="feat-icon"><i class="fas fa-screwdriver-wrench"></i></div>
+        <h3>One Tool: <code style="font-size:.9rem">ask_notebook</code></h3>
+        <p>Your agent calls it like any other tool. Grounded facts come back as the tool result — ready to reason over, refactor, or implement.</p>
+        <div class="code-block">
+<span class="c"># Claude Code calls the grounding layer</span><br/>
+<span class="k">tool</span>: ask_notebook(<br/>
+&nbsp;&nbsp;notebook=<span class="s">"api-spec"</span>,<br/>
+&nbsp;&nbsp;query=<span class="s">"list all endpoints + auth"</span><br/>
+)<br/>
+<span class="c"># → grounded, hallucination-free result</span><br/>
+<span class="c"># → Claude then writes server.py itself</span>
+        </div>
+      </div>
+      <div class="card">
+        <div class="feat-icon"><i class="fas fa-file-import"></i></div>
+        <h3>Smart Ingestion</h3>
+        <p>Inline for small files, automatic GCS fallback for large ones. You never think about it.</p>
+      </div>
+      <div class="card">
+        <div class="feat-icon"><i class="fas fa-rotate"></i></div>
+        <h3>Reuse or Start Fresh</h3>
+        <p>Notebook registry persists in session memory — pick up exactly where you left off.</p>
+      </div>
+      <div class="card">
+        <div class="feat-icon"><i class="fas fa-shield-halved"></i></div>
+        <h3>Per-User OAuth 2.0</h3>
+        <p>Your identity, your project. Documents stay inside your own Google Cloud.</p>
+      </div>
+      <div class="card">
+        <div class="feat-icon"><i class="fas fa-plug"></i></div>
+        <h3>Cross-LLM Skill</h3>
+        <p>One OpenAPI spec → a Claude Skill, GPT Action, or Gemini Extension.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- How it works -->
+<section id="how">
+  <div class="container">
+    <div class="center" style="margin-bottom:20px">
+      <div class="eyebrow reveal"><i class="fas fa-diagram-project"></i> The Flow</div>
+      <h2 class="section-title reveal">From staged doc to <span class="gradient-text-pos">shipped code</span>.</h2>
+    </div>
+    <div class="pipeline stagger">
+      <div class="pstep"><div class="porb g">1</div><h4>Stage</h4><p>Upload PDFs into a notebook</p></div>
+      <div class="pstep"><div class="porb g">2</div><h4>Ground</h4><p>RAG returns verified facts</p></div>
+      <div class="pstep"><div class="porb v">3</div><h4>Reason</h4><p>Agent plans across facts + workspace</p></div>
+      <div class="pstep"><div class="porb v">4</div><h4>Act</h4><p>Writes files, runs commands</p></div>
+      <div class="pstep"><div class="porb v">5</div><h4>Ship</h4><p>Working, spec-accurate output</p></div>
+    </div>
+  </div>
+</section>
+
+<!-- KPIs -->
+<section id="kpis">
+  <div class="container">
+    <div class="center" style="margin-bottom:54px">
+      <div class="eyebrow reveal"><i class="fas fa-gauge-high"></i> Targets</div>
+      <h2 class="section-title reveal">POC success, <span class="gradient-text">measured</span>.</h2>
+    </div>
+    <div class="kpi-grid stagger">
+      <div class="card kpi"><div class="big gradient-text-ground">≥90%</div><div class="lbl">Grounding accuracy</div></div>
+      <div class="card kpi"><div class="big gradient-text">&lt;90s</div><div class="lbl">Upload → first answer</div></div>
+      <div class="card kpi"><div class="big gradient-text-pos">100%</div><div class="lbl">Reuse-flow correctness</div></div>
+      <div class="card kpi"><div class="big gradient-text-reason">3</div><div class="lbl">Agent clients supported</div></div>
+    </div>
+  </div>
+</section>
+
+<!-- Architecture -->
+<section id="architecture">
+  <div class="container">
+    <div class="center" style="margin-bottom:54px">
+      <div class="eyebrow reveal"><i class="fas fa-sitemap"></i> System Design</div>
+      <h2 class="section-title reveal">Two layers, <span class="gradient-text">backend-less</span>.</h2>
+    </div>
+    <div class="window arch-window reveal">
+      <div class="window-bar"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span class="window-title">architecture.txt</span></div>
+      <div class="ascii">
+  <span class="hv">┌─ REASONING LAYER · Claude Code / Cursor / Gemini ─┐</span>
+  <span class="hv">│</span>  Reads workspace · writes files · runs commands    <span class="hv">│</span>
+  <span class="hv">│</span>  calls tool ▶ <span class="ha">ask_notebook(query)</span>                 <span class="hv">│</span>
+  <span class="hv">└───────────────────────┬───────────────────────────┘</span>
+                          │  grounded facts ▲ / query ▼
+  <span class="he">┌───────────────────────▼───────────────────────────┐</span>
+  <span class="he">│</span>  GROUNDING LAYER · Google Cloud (your project)     <span class="he">│</span>
+  <span class="he">│</span>  ┌─────────────────────────────────────────────┐  <span class="he">│</span>
+  <span class="he">│</span>  │ <span class="hb">Vertex AI Discovery Engine API</span>              │  <span class="he">│</span>
+  <span class="he">│</span>  │ OCR · retrieve · ground · zero hallucination │  <span class="he">│</span>
+  <span class="he">│</span>  └─────────────────────────────────────────────┘  <span class="he">│</span>
+  <span class="he">│</span>  ┌─────────────────────────────────────────────┐  <span class="he">│</span>
+  <span class="he">│</span>  │ <span class="ha">Cloud Storage</span> (large-file fallback)          │  <span class="he">│</span>
+  <span class="he">│</span>  └─────────────────────────────────────────────┘  <span class="he">│</span>
+  <span class="he">└────────────────────────────────────────────────────┘</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===== INTERACTIVE TWO-LAYER DEMO ===== -->
+<section id="demo">
+  <div class="container">
+    <div class="center" style="margin-bottom:54px">
+      <div class="eyebrow reveal"><i class="fas fa-wand-magic-sparkles"></i> Interactive</div>
+      <h2 class="section-title reveal">Watch both layers <span class="gradient-text">work together</span>.</h2>
+      <p class="section-sub reveal">Pick a task. See the <span class="gradient-text-ground">grounding layer</span> fetch verified facts, then the <span class="gradient-text-reason">reasoning layer</span> turn them into real output.</p>
+    </div>
+    <div class="tabs reveal" id="tabs">
+      <button class="tab active" data-cat="all">All</button>
+      <button class="tab" data-cat="code">Code Gen</button>
+      <button class="tab" data-cat="debug">Refactor / Debug</button>
+      <button class="tab" data-cat="workflow">Workflow</button>
+    </div>
+    <div class="demo-wrap">
+      <div class="examples" id="examples">
+
+        <div class="ex-card active" data-cat="code"
+             data-source="api-spec.pdf · 14 pages"
+             data-ground="Grounded spec: POST /orders (Bearer auth), GET /orders/{id}, 201 on create, 404 on missing order."
+             data-reason-text="Implemented both endpoints in a FastAPI server with Bearer auth middleware and matching status codes."
+             data-reason-code='<span class="k">from</span> fastapi <span class="k">import</span> FastAPI, Depends
+app = FastAPI()
+
+<span class="k">@app.post</span>(<span class="s">"/orders"</span>, status_code=<span class="s">201</span>)
+<span class="k">def</span> create_order(o: Order, _=Depends(auth)):
+    <span class="k">return</span> save(o)'>
+          <div class="ex-top"><h4><i class="fas fa-code" style="color:var(--violet-500)"></i> Implement the API spec</h4><button class="copy-btn"><i class="far fa-copy"></i></button></div>
+          <div class="ex-q">"Read the API spec PDF and write a Python server that implements it."</div>
+        </div>
+
+        <div class="ex-card" data-cat="debug"
+             data-source="architecture.pdf · 22 pages"
+             data-ground="Grounded rule: the design mandates a read-replica for all analytics queries; the primary must never serve reporting load."
+             data-reason-text="Cross-referenced your local db.py — found analytics queries hitting the primary. Flagged a bottleneck risk and proposed a replica route."
+             data-reason-code='<span class="c"># db.py — bottleneck found</span>
+<span class="c"># ❌ analytics on primary</span>
+conn = primary.connect()
+<span class="c"># ✅ fix: route to replica</span>
+conn = replica.connect()'>
+          <div class="ex-top"><h4><i class="fas fa-bug" style="color:var(--violet-500)"></i> Find bottleneck risks</h4><button class="copy-btn"><i class="far fa-copy"></i></button></div>
+          <div class="ex-q">"Read this architecture doc — does my local DB setup have bottleneck risks?"</div>
+        </div>
+
+        <div class="ex-card" data-cat="workflow"
+             data-source="runbook.pdf · 9 pages"
+             data-ground="Grounded steps: drain canary → re-point load balancer to previous revision → run migrate --down to last stable schema."
+             data-reason-text="Queried the runbook, generated a rollback script, then ran it in dry-run mode to verify each step before applying."
+             data-reason-code='<span class="c"># rollback.sh (generated + dry-run tested)</span>
+lb drain canary
+lb route --to prev-revision
+migrate --down --to last-stable <span class="c"># ✓ dry-run ok</span>'>
+          <div class="ex-top"><h4><i class="fas fa-list-check" style="color:var(--violet-500)"></i> Multi-step rollback</h4><button class="copy-btn"><i class="far fa-copy"></i></button></div>
+          <div class="ex-q">"Use the runbook to build and dry-run a rollback script."</div>
+        </div>
+
+        <div class="ex-card" data-cat="code"
+             data-source="schema.pdf · 6 pages"
+             data-ground="Grounded schema: User(id, email UNIQUE, created_at), Order(id, user_id FK, total, status enum)."
+             data-reason-text="Generated SQLAlchemy models matching the documented schema, including the unique constraint and FK relationship."
+             data-reason-code='<span class="k">class</span> User(Base):
+    id = Column(Integer, primary_key=<span class="s">True</span>)
+    email = Column(String, unique=<span class="s">True</span>)
+<span class="k">class</span> Order(Base):
+    user_id = Column(ForeignKey(<span class="s">"user.id"</span>))'>
+          <div class="ex-top"><h4><i class="fas fa-table" style="color:var(--violet-500)"></i> Generate data models</h4><button class="copy-btn"><i class="far fa-copy"></i></button></div>
+          <div class="ex-q">"Build SQLAlchemy models from the schema PDF."</div>
+        </div>
+
+      </div>
+
+      <!-- Simulator -->
+      <div class="sim-panel reveal">
+        <div class="sim-head">
+          <span class="st">🪶 pocketrag · two-layer simulator</span>
+          <span class="sim-status idle" id="simStatus">idle</span>
+        </div>
+        <div class="sim-body" id="simBody">
+          <p style="color:var(--text-400);font-size:.9rem">Select a task on the left, then hit <strong>Run Task</strong>. Watch the <span class="gradient-text-ground">grounding layer</span> fetch facts → the <span class="gradient-text-reason">reasoning layer</span> ship the work.</p>
+        </div>
+        <div style="padding:0 22px 22px">
+          <button class="btn btn-primary run-btn" id="runBtn"><i class="fas fa-play"></i> Run Task</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- CTA -->
+<section id="cta">
+  <div class="container">
+    <div class="cta-card reveal">
+      <h2>Give your agent a perfect memory.</h2>
+      <p>Install PocketRAG as a skill, connect your Google Cloud project, and let your favorite LLM reason over 100% accurate facts and persistent memory.</p>
+      <div class="cta-btns">
+        <a href="https://github.com/mbettan/PocketRAG" class="btn btn-white"><i class="fab fa-github"></i> Get the Code</a>
+        <a href="#demo" class="btn btn-ghost"><i class="fas fa-play"></i> Explore the Demo</a>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Footer -->
+<footer>
+  <div class="container foot-grid">
+    <div>
+      <div class="logo" style="margin-bottom:8px"><span class="logo-mark">🪶</span> PocketRAG</div>
+      <div class="copyright">Grounding meets reasoning. · © 2026 PocketRAG · Apache 2.0 License</div>
+    </div>
+    <div class="foot-links">
+      <a href="https://github.com/mbettan/PocketRAG"><i class="fab fa-github"></i> GitHub</a>
+      <a href="./PRD.md"><i class="fas fa-file-lines"></i> PRD</a>
+      <a href="#top"><i class="fas fa-arrow-up"></i> Top</a>
+    </div>
+  </div>
+</footer>
+
+<script>
+// Navbar scroll
+const navbar=document.getElementById('navbar');
+window.addEventListener('scroll',()=>navbar.classList.toggle('scrolled',window.scrollY>40));
+
+// Reveal + stagger
+const io=new IntersectionObserver((entries)=>{
+  entries.forEach(e=>{
+    if(e.isIntersecting){
+      e.target.classList.add('visible');
+      if(e.target.classList.contains('stagger')){
+        [...e.target.children].forEach((c,i)=>c.style.transitionDelay=(i*80)+'ms');
+      }
+      io.unobserve(e.target);
+    }
+  });
+},{threshold:.12});
+document.querySelectorAll('.reveal,.stagger').forEach(el=>io.observe(el));
+
+// Tabs
+const tabs=document.querySelectorAll('.tab');
+const exCards=document.querySelectorAll('.ex-card');
+tabs.forEach(tab=>tab.addEventListener('click',()=>{
+  tabs.forEach(t=>t.classList.remove('active'));tab.classList.add('active');
+  const cat=tab.dataset.cat;
+  exCards.forEach(c=>{c.style.display=(cat==='all'||c.dataset.cat===cat)?'block':'none';});
+}));
+
+// Select example
+let selected=document.querySelector('.ex-card.active');
+exCards.forEach(c=>c.addEventListener('click',(e)=>{
+  if(e.target.closest('.copy-btn'))return;
+  exCards.forEach(x=>x.classList.remove('active'));
+  c.classList.add('active');selected=c;
+}));
+
+// Copy
+document.querySelectorAll('.copy-btn').forEach(btn=>btn.addEventListener('click',(e)=>{
+  e.stopPropagation();
+  const q=btn.closest('.ex-card').querySelector('.ex-q').textContent;
+  navigator.clipboard.writeText(q).then(()=>{
+    const icon=btn.querySelector('i');const old=icon.className;
+    icon.className='fas fa-check';icon.style.color='var(--emerald-500)';
+    setTimeout(()=>{icon.className=old;icon.style.color='';},1400);
+  });
+}));
+
+// Two-layer simulator
+const runBtn=document.getElementById('runBtn');
+const simStatus=document.getElementById('simStatus');
+const simBody=document.getElementById('simBody');
+let running=false;
+
+const groundSteps=[
+  {c:'ground',t:'🔐 OAuth → your GCP project'},
+  {c:'ground',t:'🪶 tool call: ask_notebook(...)'},
+  {c:'ground',t:'📄 OCR + retrieve from source'},
+  {c:'ground',t:'✅ grounded facts returned'}
+];
+const reasonSteps=[
+  {c:'reason',t:'🧠 reasoning over grounded facts'},
+  {c:'reason',t:'📂 reading local workspace'},
+  {c:'reason',t:'✍️ writing output...'}
+];
+
+function addLine(step,delay){
+  const line=document.createElement('div');
+  line.className='sim-line '+step.c;
+  line.innerHTML=`<i class="fas fa-circle-check"></i> ${step.t}`;
+  simBody.appendChild(line);
+  setTimeout(()=>line.classList.add('show'),delay);
+  return line;
+}
+
+runBtn.addEventListener('click',()=>{
+  if(running||!selected)return;running=true;
+  simBody.innerHTML='';
+  simStatus.textContent='processing';simStatus.className='sim-status proc';
+  const d=selected.dataset;
+  let t=200;
+
+  groundSteps.forEach((s)=>{addLine(s,t);t+=400;});
+
+  // Grounding result box
+  setTimeout(()=>{
+    const box=document.createElement('div');
+    box.className='layer-box ground-box';
+    box.innerHTML=`<div class="lb-tag"><i class="fas fa-anchor"></i> LAYER 1 · GROUNDED FACTS · ${d.source}</div><div class="lb-body">${d.ground}</div>`;
+    simBody.appendChild(box);
+    requestAnimationFrame(()=>box.classList.add('show'));
+  },t);
+  t+=600;
+
+  reasonSteps.forEach((s)=>{
+    setTimeout(()=>{addLine(s, 0);}, t);
+    t += 400;
+  });
+
+  // Reasoning result box
+  setTimeout(()=>{
+    const box=document.createElement('div');
+    box.className='layer-box reason-box';
+    box.innerHTML=`<div class="lb-tag"><i class="fas fa-brain"></i> LAYER 2 · REASONED ACTION · CLAUDE CODE</div><div class="lb-body">${d.reasonText}</div><pre>${d.reasonCode}</pre>`;
+    simBody.appendChild(box);
+    requestAnimationFrame(()=>box.classList.add('show'));
+    
+    simStatus.textContent='done';
+    simStatus.className='sim-status done';
+    running=false;
+  },t);
+});
+</script>
+</body>
+</html>
